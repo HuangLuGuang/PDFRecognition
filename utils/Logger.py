@@ -5,7 +5,8 @@
 # @email: luguang.huang@mabotech.com
 # _*_ coding: utf-8 _*_
 import logging
-import os.path
+import config
+import os
 import time
 
 project_path = 'logs'
@@ -45,11 +46,11 @@ class Logger(object):
             log_name = new_name + dir_time + '/' + current_time + '.log'  # 定义日志文件的路径以及名称
 
             fh = logging.FileHandler(log_name)
-            fh.setLevel(logging.INFO)
+            fh.setLevel(config.LOG_LEVEL)
 
             # 再创建一个handler，用于输出到控制台
             ch = logging.StreamHandler()
-            ch.setLevel(logging.INFO)
+            ch.setLevel(config.LOG_LEVEL)
 
             # 定义handler的输出格式
             formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')

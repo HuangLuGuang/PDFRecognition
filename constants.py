@@ -4,6 +4,9 @@
 # @fileName: constants.py
 # @email: luguang.huang@mabotech.com
 
+# PDF所保存的文件夹
+
+
 # pdf 表头识别像素范围
 header_scope = {
             "title": (500, 20, 1520, 90),  # 标题

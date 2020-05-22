@@ -23,7 +23,7 @@ from utils.RedisHelper import MyRedis
 
 log = Logger()
 try:
-    redis = MyRedis(host=config.REDIS_HOST, port=config.REDIS_PORT)
+    redis = MyRedis(host=config.REDIS_HOST, password=config.REDIS_PASSWORD, port=config.REDIS_PORT)
 except Exception:
     log.error(traceback.format_exc())
 
@@ -199,8 +199,9 @@ def image_to_text(image_path, index, serial_num):
         redis.hash_set(serial_num, index, json.dumps(result))
 
 
-def run(pdf_path):
+def parse_pdf(pdf_path):
     all_png_absolute_path = pdf_to_table(pdf_path=pdf_path)
+    actual_filename = os.path.basename(pdf_path)
     if all_png_absolute_path:
         header_image = Image.open(all_png_absolute_path[0])
         # 先识别序列序列号，作为业务主键
@@ -214,25 +215,33 @@ def run(pdf_path):
                 serial = tr_result[index+1][1]
                 break
         print(serial)
+        # 如果序列号不为空，识别检验项
         if serial:
             # pool = multiprocessing.Pool(1)
             start_time = time.time()
-            for index, png_absolute_path in enumerate(all_png_absolute_path):
-                try:
-                    image_to_text(png_absolute_path, index, serial)
-                except Exception:
-                    log.error(traceback.format_exc())
+            try:
+                redis.hash_set(serial, 'actual_filename', actual_filename)
+                redis.hash_set(serial, 'finish', 0)
+                redis.hash_set(serial, 'image_count', len(all_png_absolute_path))
+                for index, png_absolute_path in enumerate(all_png_absolute_path):
+                        image_to_text(png_absolute_path, index, serial)
+            except Exception:
+                log.error(traceback.format_exc())
                 # pool.apply_async(image_to_text, args=(png_absolute_path, index))
             # pool.close()
             # pool.join()
-            print(redis.hash_get_all(serial))
+            try:
+                redis.hash_set(serial, 'elapsed_time', str(time.time() - start_time))
+                redis.hash_set(serial, 'finish', 1)
+            except Exception:
+                log.error(traceback.format_exc())
             print(time.time() - start_time)
         else:
             log.error('{}: 序列号为空'.format(pdf_path))
 
 
 if __name__ == '__main__':
-    # run(pdf_path=r"""example/160/00057A20.04.17.PDF""")
-    run(pdf_path=r"""example/160/19101132  2020.03.14.PDF""")
+    parse_pdf(pdf_path=r"""example/160/00057A20.04.17.PDF""")
+    # run(pdf_path=r"""example/160/19101132  2020.03.14.PDF""")
     # run(pdf_path=r"""example/160/19.11.13   106795   .PDF""")
     # run(pdf_path=r"""example/250/250070004011191200001.PDF""")
