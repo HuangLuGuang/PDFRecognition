@@ -34,6 +34,8 @@ class FileEventHandler(FileSystemEventHandler):
         else:
             pdf_path = self.convert_path(event.src_path)
             logger.info("file created:{0}".format(event.src_path))
+            # 文件写入需要一定的时间，比如PDF写了一半，这时候解析会报错，等待时间可以根据文件大小调整
+            time.sleep(1)
             parse_pdf(pdf_path)
 
     def on_deleted(self, event):
