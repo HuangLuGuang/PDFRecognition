@@ -23,7 +23,7 @@ from utils.RedisHelper import MyRedis
 
 log = Logger()
 try:
-    redis = MyRedis(host=config.REDIS_HOST, password=config.REDIS_PASSWORD, port=config.REDIS_PORT)
+    redis = MyRedis(host=config.REDIS_HOST, port=config.REDIS_PORT, password=config.REDIS_PASSWORD)
 except Exception:
     log.error(traceback.format_exc())
 
@@ -155,6 +155,8 @@ def image_to_text(image_path, index, serial_num):
                 else:
                     text = correct_text(k, item[1])
             result[k] = text
+        # 矫正 serialno
+        result['serialnum'] = serial_num
         log.info('index:{0}, text:{1}'.format(*(index, result)))
         redis.hash_set(serial_num, index, json.dumps(result))
     else:
@@ -177,22 +179,28 @@ def image_to_text(image_path, index, serial_num):
                     text_base_columns = result[k]
                     np_base_columns = np_column
 
-            # 直线度 平面度 圆度 圆柱度 对称度 同轴度 位置度 全跳动 圆跳动 这几种没有下偏差 -TOL
             # 这种需要单独处理 如果用 tr.recognize 有些测试值空格识别不出来，会粘在一起
-            elif k == 'test_value' and is_exist_low_tol(title1=result['title1']) is False :
+            # 如果title1 里面有K，则显示用title1
+            elif k == 'test_value' and 'K' in result['title1'] :
                 text = ''
                 tr_result = tr.run_angle(img)
-                for index, item in enumerate(tr_result):
+                for i, item in enumerate(tr_result):
                     # 第四列是-TOL，填充一个空置
-                    if index == 3:
-                        text = text + ' ' + 'null'
+                    if i == 3:
+                        text = text + ' ' + 'null' + ' ' + item[1]
                     else:
                         text = text + ' ' + item[1]
-                result[k] = text
 
-                print('start', '*'*100)
+                # 末尾填充null，为了防止BONUS有些pdf里没有值，没法一一对应
+                text = text + ' ' + 'null'
+                text = text.strip()
+                # 如果加了 'null' 之后，column_name 和test_value 长度不同，说明不需要null占位，需要去除
+                if len(result['column_name'].split(' ')) != len(text.split(' ')):
+                    text = text.replace(' null', '')
+
+                result[k] = text
                 print(result)
-                print('end', '*' * 100)
+
             else:
                 result[k] = correct_text(k, tr.recognize(img)[0])
         log.info('index:{0}, text:{1}'.format(*(index, result)))
@@ -207,16 +215,21 @@ def parse_pdf(pdf_path):
         # 先识别序列序列号，作为业务主键
         serial_img = cut_img(img=header_image, coordinate=constants.header_scope['serialnum'])
         # serial = tr.recognize(serial_img)[0]
-        serial = None
+        serial = ''
         tr_result = tr.run_angle(serial_img)
-        for index, item in enumerate(tr_result):
-            # 识别的结果里面 字符串 ’序列号‘ 下一个值就是序列号
-            if item[1] == '序列号' and index + 1 < len(tr_result):
-                serial = tr_result[index+1][1]
-                break
-        print(serial)
+        log.info(tr_result)
+        flag = False
+        for item in tr_result:
+            # 识别的结果里面 字符串 ’序列号‘ 后面的就是序列号，进行拼接
+            if item[1] == '序列号':
+                flag = True
+                continue
+            if flag:
+                serial = serial + ' ' + item[1]
         # 如果序列号不为空，识别检验项
         if serial:
+            serial = serial.strip()
+            print(serial)
             # pool = multiprocessing.Pool(1)
             start_time = time.time()
             try:
@@ -241,7 +254,8 @@ def parse_pdf(pdf_path):
 
 
 if __name__ == '__main__':
-    parse_pdf(pdf_path=r"""example/160/00057A20.04.17.PDF""")
+    parse_pdf(pdf_path=r"""example/0e7c4f5aba7511eab5fc0242ac110004.PDF""")
+    # parse_pdf(pdf_path=r"""example/250070004011191100001.PDF""")
     # run(pdf_path=r"""example/160/19101132  2020.03.14.PDF""")
     # run(pdf_path=r"""example/160/19.11.13   106795   .PDF""")
     # run(pdf_path=r"""example/250/250070004011191200001.PDF""")
