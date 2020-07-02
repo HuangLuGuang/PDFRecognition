@@ -131,7 +131,7 @@ def is_exist_low_tol(title1):
     return True
 
 
-def image_to_text(image_path, index, serial_num):
+def image_to_text(image_path, index, actual_filename):
     """
     :param image_path: pdf 切割后每个小图片的路径
     :param index: 索引
@@ -145,6 +145,9 @@ def image_to_text(image_path, index, serial_num):
         scope = constants.header_scope
         result = {}
         for k, v in scope.items():
+            # 序列号从文件名中取，不在图片中进行识别
+            if k == 'serialnum':
+                continue
             img = cut_img(img=image, coordinate=v)
             # 表头高度有轻微变化，用run_angle检测识别出范围
             tr_result = tr.run_angle(img)
@@ -155,10 +158,9 @@ def image_to_text(image_path, index, serial_num):
                 else:
                     text = correct_text(k, item[1])
             result[k] = text
-        # 矫正 serialno
-        result['serialnum'] = serial_num
+
         log.info('index:{0}, text:{1}'.format(*(index, result)))
-        redis.hash_set(serial_num, index, json.dumps(result))
+        redis.hash_set(actual_filename, index, json.dumps(result))
     else:
         scope = constants.normal_scope
         result = {}
@@ -204,53 +206,32 @@ def image_to_text(image_path, index, serial_num):
             else:
                 result[k] = correct_text(k, tr.recognize(img)[0])
         log.info('index:{0}, text:{1}'.format(*(index, result)))
-        redis.hash_set(serial_num, index, json.dumps(result))
+        redis.hash_set(actual_filename, index, json.dumps(result))
 
 
 def parse_pdf(pdf_path):
+    # 将PDF报告切割成小图片
     all_png_absolute_path = pdf_to_table(pdf_path=pdf_path)
     actual_filename = os.path.basename(pdf_path)
-    if all_png_absolute_path:
-        header_image = Image.open(all_png_absolute_path[0])
-        # 先识别序列序列号，作为业务主键
-        serial_img = cut_img(img=header_image, coordinate=constants.header_scope['serialnum'])
-        # serial = tr.recognize(serial_img)[0]
-        serial = ''
-        tr_result = tr.run_angle(serial_img)
-        log.info(tr_result)
-        flag = False
-        for item in tr_result:
-            # 识别的结果里面 字符串 ’序列号‘ 后面的就是序列号，进行拼接
-            if item[1] == '序列号':
-                flag = True
-                continue
-            if flag:
-                serial = serial + ' ' + item[1]
-        # 如果序列号不为空，识别检验项
-        if serial:
-            serial = serial.strip()
-            print(serial)
-            # pool = multiprocessing.Pool(1)
-            start_time = time.time()
-            try:
-                redis.hash_set(serial, 'actual_filename', actual_filename)
-                redis.hash_set(serial, 'finish', 0)
-                redis.hash_set(serial, 'image_count', len(all_png_absolute_path))
-                for index, png_absolute_path in enumerate(all_png_absolute_path):
-                        image_to_text(png_absolute_path, index, serial)
-            except Exception:
-                log.error(traceback.format_exc())
-                # pool.apply_async(image_to_text, args=(png_absolute_path, index))
-            # pool.close()
-            # pool.join()
-            try:
-                redis.hash_set(serial, 'elapsed_time', str(time.time() - start_time))
-                redis.hash_set(serial, 'finish', 1)
-            except Exception:
-                log.error(traceback.format_exc())
-            print(time.time() - start_time)
-        else:
-            log.error('{}: 序列号为空'.format(pdf_path))
+    if all_png_absolute_path and actual_filename:
+        # 处理过的文件名作为redis主键
+        start_time = time.time()
+        try:
+            redis.hash_set(actual_filename, 'actual_filename', actual_filename)
+            redis.hash_set(actual_filename, 'finish', 0)
+            redis.hash_set(actual_filename, 'image_count', len(all_png_absolute_path))
+            for index, png_absolute_path in enumerate(all_png_absolute_path):
+                    image_to_text(png_absolute_path, index, actual_filename)
+        except Exception:
+            log.error(traceback.format_exc())
+        try:
+            redis.hash_set(actual_filename, 'elapsed_time', str(time.time() - start_time))
+            redis.hash_set(actual_filename, 'finish', 1)
+        except Exception:
+            log.error(traceback.format_exc())
+        print(time.time() - start_time)
+    else:
+        log.error('{}: PDF报告为空'.format(pdf_path))
 
 
 if __name__ == '__main__':
