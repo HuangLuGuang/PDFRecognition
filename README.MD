@@ -28,3 +28,6 @@ cd ./tr
 sudo python setup.py install
 安装方法二
 pip install git+https://github.com/myhub/tr.git@master
+
+启动：
+`systemctl start pdfparse`

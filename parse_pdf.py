@@ -12,7 +12,6 @@ import traceback
 import natsort
 import shutil
 from PIL import Image, ImageEnhance
-import multiprocessing
 import tr
 import cv2
 import numpy as np
@@ -172,7 +171,8 @@ def image_to_text(image_path, index, actual_filename):
                 global np_base_columns, text_base_columns
 
                 # 判断和之前的列名是否一样，避免重复识别，提高速度
-                if (np_column.shape == np_base_columns.shape) and (not np.any(cv2.subtract(np_base_columns, np_column))):
+                if (np_column.shape == np_base_columns.shape) and (
+                not np.any(cv2.subtract(np_base_columns, np_column))):
                     result[k] = text_base_columns
                     continue
                 else:
@@ -183,7 +183,7 @@ def image_to_text(image_path, index, actual_filename):
 
             # 这种需要单独处理 如果用 tr.recognize 有些测试值空格识别不出来，会粘在一起
             # 如果title1 里面有K，则显示用title1
-            elif k == 'test_value' and 'K' in result['title1'] :
+            elif k == 'test_value' and 'K' in result['title1']:
                 text = ''
                 tr_result = tr.run_angle(img)
                 for i, item in enumerate(tr_result):
@@ -221,7 +221,7 @@ def parse_pdf(pdf_path):
             redis.hash_set(actual_filename, 'finish', 0)
             redis.hash_set(actual_filename, 'image_count', len(all_png_absolute_path))
             for index, png_absolute_path in enumerate(all_png_absolute_path):
-                    image_to_text(png_absolute_path, index, actual_filename)
+                image_to_text(png_absolute_path, index, actual_filename)
         except Exception:
             log.error(traceback.format_exc())
         try:

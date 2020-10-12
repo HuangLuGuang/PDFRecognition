@@ -7,7 +7,7 @@ import logging
 
 REDIS_HOST = "127.0.0.1"
 REDIS_PORT = 6379
-REDIS_PASSWORD = 'redis1234$'
+REDIS_PASSWORD = None
 
 DEBUG = True
 
